@@ -1,160 +1,4 @@
-/* LED Piano V001
-   by @Fanseline, 20220608
-
-   Hardware:
-     1. Arduino UNO R3
-     2. USB Host Shield 2.0:
-        Hardware manual: https://chome.nerpa.tech/usb-host-shield-hardware-manual/
-        Soldered as: https://chome.nerpa.tech/wp/wp-content/uploads/2011/02/uhs20s_pin_layout.jpg
-     3. WS2812B (Total 175 LEDs, 144 LEDs/m, GRB array, 5V power)
-
-   Software Libraries:
-     1. Ticker: https://github.com/sstaub/Ticker
-     2. FastLED: https://github.com/FastLED/FastLED
-     3. USB Host Shield 2.0: https://github.com/felis/USB_Host_Shield_2.0
-     4. MIDIVisualizer (make piano roll video): https://github.com/kosua20/MIDIVisualizer
-*/
-
-#include "Ticker.h"
-#include <FastLED.h>
-#include <usbh_midi.h>
-#include <usbhub.h>
-#include <EEPROM.h>
-
-// #define DEBUG
-
-#define NUM_LEDS 175 // Max NUM_LEDS = 180
-#define NUM_KEYS 88
-
-#define STRIP_PIN 14 // A0 Pin
-// #define STRIP_CLOCK 3
-#define START_NOTE 21 // A0, leftmost key on your keyboard
-#define MIDI_OFFSET 0
-
-#define FUNC_KEY_PREV 21
-#define FUNC_KEY_NEXT 22
-#define FUNC_KEY_SET 23
-#define FUNC_KEY_CONFIRM 23
-
-#define FPS 60
-#define MAX_ALPHA 255
-
-#define CONFIG_SIZE 10 // 10 bytes for each config
-#define NUM_SAVE_SLOTS 5
-#define NUM_SETTING_KEYS 4
-
-const static char projectTitle[] = "FanLEDPiano V001";
-const static uint8_t projectTitleLength = 16;
-
-const static uint8_t keyLedMap[NUM_KEYS] =
-{ 0, 2, 4, // A0 -> B0
-  6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, // C1 -> B1
-  30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, // C2 -> B2
-  54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, // C3 -> B3
-  78, 80, 82, 84, 86, 88, 90, 92, 94, 96, 98, 100, // C4 -> B4
-  102, 104, 106, 108, 110, 112, 114, 116, 118, 120, 122, 124, // C5 -> B5
-  126, 128, 130, 132, 134, 136, 138, 140, 142, 144, 146, 148, // C6 -> B6
-  150, 152, 154, 156, 158, 160, 162, 164, 166, 168, 170, 172, // C7 -> B7
-  174 // C8
-};
-
-const static uint8_t keyMidiMap[NUM_KEYS] =
-{ 21, 22, 23, // A0 -> B0
-  24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, // C1 -> B1
-  36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, // C2 -> B2
-  48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, // C3 -> B3
-  60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, // C4 -> B4
-  72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, // C5 -> B5
-  84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, // C6 -> B6
-  96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, // C7 -> B7
-  108 // C8
-};
-
-const static uint8_t settingLedLeftStart = 0;
-const static uint8_t settingLedLeftEnd = 7;
-const static uint8_t styleNumLedStart = 8;
-const static uint8_t styleNumLedEnd = 15;
-const static uint8_t settingLedRightStart = 163;
-const static uint8_t settingLedRightEnd = 174;
-
-const static uint8_t slotKeys[NUM_SAVE_SLOTS] = {82, 83, 84, 85, 86}; // from G7 to B7, index of keyData[]
-const static uint8_t confirmKey = 87; // C8, index of keyData[]
-const static uint8_t settingKeys[NUM_SETTING_KEYS] = {0, 1, 2, 3}; // from A0 to C1, index of keyData[]
-
-const static uint8_t bgAnimationNum = 10;
-const static uint8_t bgAnimationList[bgAnimationNum] =
-{ 0x00, 0x01,
-  0x10, 0x11, 0x12, 0x13, 0x14,
-  0x20, 0x21, 0x22
-}; // List for blendFgColors()
-const static uint8_t keyAnimationNum = 10;
-const static uint8_t keyAnimationList[keyAnimationNum] =
-{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}; // List for updateKeyAnimation()
-
-const static uint8_t bgColorNum = 27;
-const static uint8_t bgColorList[bgColorNum] =
-{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, // Pure color
-  0x80 | 0, 0x80 | 1, 0x80 | 2, 0x80 | 3, 0x80 | 4, 0x80 | 5, 0x80 | 6, 0x80 | 7, // Gradient one cycle
-  0xE0 | 0, 0xE0 | 1, 0xE0 | 2, 0xE0 | 3, 0xE0 | 4, 0xE0 | 5, 0xE0 | 6, 0xE0 | 7, // Gradient multi-cycle
-}; // List for getColorByCode()
-const static uint8_t keyColorNum = 28;
-const static uint8_t keyColorList[keyColorNum] =
-{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, // Pure color
-  0x80 | 0, 0x80 | 1, 0x80 | 2, 0x80 | 3, 0x80 | 4, 0x80 | 5, 0x80 | 6, 0x80 | 7, // Gradient one cycle
-  0xE0 | 0, 0xE0 | 1, 0xE0 | 2, 0xE0 | 3, 0xE0 | 4, 0xE0 | 5, 0xE0 | 6, 0xE0 | 7, // Gradient multi-cycle
-  0x40 | 0, // random color
-}; // List for getColorByCode()
-
-const static uint8_t bgSIdleOffset = 0x04; // Saturation offset
-const static uint8_t bgVIdleOffset = 0x01; // Brightness offset
-const static uint8_t bgSActivatedOffset = 0x0D;
-const static uint8_t bgVActivatedOffset = 0x0A;
-const static uint8_t keySOffset = 0x0F;
-const static uint8_t keyVOffset = 0x0F;
-
-/* systemStatus & settingStatus definition
-   systemStatus: 0x0?:none, 0x1?:start up, 0x2?:seeking midi, 0x3?:main/setting, 0x4?: usb error
-   settingStatus: 0x00:none (idle)
-                  0x10:bgAnimation, 0x11:bgColorIdle, 0x12:bgSaturationIdle, 0x13:bgBrightnessIdle
-                                    0x14:bgColorActivated, 0x15:bgSaturationActivated, 0x16:bgBrightnessActivated
-                  0x20:keyAnimation, 0x21:whiteKeyColor, 0x22:whiteKeySaturation, 0x23:whiteKeyBrightness
-                                     0x24:blackKeyColor, 0x25:blackKeySaturation, 0x26:blackKeyBrightness
-*/
-uint8_t systemStatus = 0x00;
-uint8_t settingStatus = 0x00;
-
-uint8_t configNum = 0; // Load from or save to which slot
-
-uint8_t bgAnimation = 0x01;
-uint8_t bgColorIdle = 0x01; // Hue or gradient color
-uint8_t bgSVIdle = 0x00; // Saturation & Brightness
-uint8_t bgColorActivated = 0x01;
-uint8_t bgSVActivated = 0x00;
-
-uint8_t keyAnimation = 0x01;
-uint8_t whiteKeyColor = 0x07;
-uint8_t whiteKeySV = 0xAD;
-uint8_t blackKeyColor = 0x01;
-uint8_t blackKeySV = 0xAD;
-
-int16_t frameCount = 0; // Used for background frame counting
-int16_t frameCountSetting = 0; // Used for system setting status and error status
-
-float increaseFactor = 0;
-float fadeFactorPress = 0.97;
-float fadeFactorRelease = 0.3;
-
-CRGBArray<NUM_LEDS> leds;
-USB Usb;
-USBH_MIDI Midi(&Usb);
-
-struct KeyData {
-  uint8_t alpha;
-  // 0x80:blackKey, 0x40:refreshing, 0x20:pressing, 0x10:peaked
-  // 0x?0 - 0x?F: random color cache
-  uint8_t control;
-};
-KeyData keyData[NUM_KEYS];
+#include "LEDPianoConfig.h"
 
 void initKeys() {
   for (int i = 0; i < NUM_KEYS; ++i) {
@@ -287,31 +131,47 @@ void blendBgColors() {
   uint8_t leftActivatedNum = uint8_t(powerRatio * leftLedNum + 0.5);
   uint8_t rightActivatedNum = uint8_t(powerRatio * rightLedNum + 0.5);
 
-  int huePeriod = 0;
+  const static int timeScalar = 5;
+
+  int huePeriod = NUM_LEDS;
   int hueCount = 0;
 
   // Notice: Remember to add your new code to bgAnimationList[]
   switch (bgAnimation) { // set hue period
     case 0x20: // dynamic rainbow left to right
-    case 0x21: // dynamic rainbow rigth to left
+    case 0x22: // dynamic rainbow rigth to left
+      if (++frameCount >= huePeriod) {
+        frameCount = 0;
+      }
       huePeriod = NUM_LEDS;
-      ++frameCount;
-      if (frameCount >= huePeriod) {
+      break;
+    case 0x21: // dynamic rainbow left to right (slow)
+    case 0x23: // dynamic rainbow rigth to left (slow)
+      huePeriod = NUM_LEDS;
+      if (++frameCount >= huePeriod * timeScalar) {
         frameCount = 0;
       }
       break;
 
-    case 0x22: // dynamic rainbow breath
+    case 0x24: // dynamic rainbow breath
       huePeriod = 255;
-      ++frameCount;
-      if (frameCount >= huePeriod) {
+      if (++frameCount >= huePeriod) {
+        frameCount = 0;
+      }
+      break;
+    case 0x25: // dynamic rainbow breath (slow)
+      huePeriod = 255 * timeScalar;
+      if (++frameCount >= huePeriod) {
         frameCount = 0;
       }
       break;
 
     default:
-      huePeriod = NUM_LEDS;
       break;
+  }
+
+  if (bgAnimation == 0x14) { // change all brightness
+    idleBrightness = uint8_t(float(activatedBrightness - idleBrightness) * powerRatio + 0.5 + float(idleBrightness));
   }
 
   for (int j = 0; j < NUM_LEDS; ++j) {
@@ -342,19 +202,25 @@ void blendBgColors() {
         break;
 
       case 0x14: // change all brightness
-        idleBrightness = uint8_t(float(activatedBrightness - idleBrightness) * powerRatio + 0.5 + float(idleBrightness));
         hueCount = j + frameCount;
         break;
 
       case 0x20: // dynamic rainbow left to right
         hueCount = j + huePeriod - frameCount;
         break;
-
-      case 0x21: // dynamic rainbow rigth to left
-        hueCount = j + frameCount;
+      case 0x21: // dynamic rainbow left to right (slow)
+        hueCount = j + (huePeriod - frameCount) / timeScalar;
         break;
 
-      case 0x22: // dynamic rainbow breath
+      case 0x22: // dynamic rainbow rigth to left
+        hueCount = j + frameCount;
+        break;
+      case 0x23: // dynamic rainbow rigth to left (slow)
+        hueCount = j + frameCount / timeScalar;
+        break;
+
+      case 0x24:
+      case 0x25: // dynamic rainbow breath
         hueCount = frameCount;
         break;
 
@@ -433,7 +299,7 @@ void updateKeyAnimation() {
   const static float increaseNone = 0.0;
   const static float increaseSlow = 0.03;
   const static float increaseFast = 0.97;
-  const static float fadeSlow = 0.97;
+  const static float fadeSlow = 0.95;
   const static float fadeMedian = 0.7;
   const static float fadeFast = 0.3;
   const static float fadeNone = 1.0;
@@ -697,7 +563,7 @@ void showConfigNum() {
   const static uint8_t defaultH2 = 0x64; // green
   const static uint8_t defaultS = 0xD0;
   const static uint8_t defaultV = 0x20;
-  const static uint8_t defaultV2 = 0xD0;
+  const static uint8_t defaultV2 = 0x80;
   for (int i = settingLedRightStart; i <= settingLedRightEnd; ++i) {
     leds[i] = CHSV(0, 0, 0);
   }
@@ -714,7 +580,7 @@ void showConfigNum() {
 }
 
 void showConfigKeyPress() {
-  const static CHSV ledOn = CHSV(0, 0, 0xC0);
+  const static CHSV ledOn = CHSV(0, 0, 0x90);
   for (int i = 0; i < NUM_SAVE_SLOTS; ++i) {
     if (keyData[slotKeys[i]].control & 0x20) { // pressing
       leds[keyLedMap[slotKeys[i]]] = ledOn;
@@ -766,7 +632,7 @@ uint8_t getNextSaturation(uint8_t codeSV) {
 uint8_t getNextBrightness(uint8_t codeSV) {
   uint8_t sat = codeSV & 0xF0;
   uint8_t bri = codeSV & 0x0F;
-  if (bri >= 0x0F) {
+  if (bri >= MAX_BRIGHTNESS) {
     return sat;
   } else {
     return sat | (bri + 1);
@@ -777,6 +643,7 @@ void nextStyle() {
   switch (settingStatus) {
     case 0x10: // bgAnimation
       bgAnimation = getNextListData(bgAnimationList, 0, bgAnimationNum, bgAnimation);
+      frameCount = 0;
       break;
 
     case 0x11: // bgColorIdle
@@ -863,7 +730,7 @@ uint8_t getPrevBrightness(uint8_t codeSV) {
   uint8_t sat = codeSV & 0xF0;
   uint8_t bri = codeSV & 0x0F;
   if (bri == 0x00) {
-    return sat | 0x0F;
+    return sat | MAX_BRIGHTNESS;
   } else {
     return sat | (bri - 1);
   }
@@ -873,6 +740,7 @@ void prevStyle() {
   switch (settingStatus) {
     case 0x10: // bgAnimation
       bgAnimation = getPrevListData(bgAnimationList, 0, bgAnimationNum, bgAnimation);
+      frameCount = 0;
       break;
 
     case 0x11: // bgColorIdle
@@ -1161,17 +1029,17 @@ void initSaveSlots() {
   configNum = 0;
   EEPROM.update(eepromPointer++, configNum);
   for (int i = 0; i < NUM_SAVE_SLOTS; ++i) {
-    EEPROM.update(eepromPointer++, 0x01); // bgAnimation
-    EEPROM.update(eepromPointer++, 0x01); // bgColorIdle
-    EEPROM.update(eepromPointer++, 0x82); // bgSVIdle
-    EEPROM.update(eepromPointer++, 0x04); // bgColorActivated
-    EEPROM.update(eepromPointer++, 0xE8); // bgSVActivated
+    EEPROM.update(eepromPointer++, defaultConfig[i][0]); // bgAnimation
+    EEPROM.update(eepromPointer++, defaultConfig[i][1]); // bgColorIdle
+    EEPROM.update(eepromPointer++, defaultConfig[i][2]); // bgSVIdle
+    EEPROM.update(eepromPointer++, defaultConfig[i][3]); // bgColorActivated
+    EEPROM.update(eepromPointer++, defaultConfig[i][4]); // bgSVActivated
 
-    EEPROM.update(eepromPointer++, 0x01); // keyAnimation
-    EEPROM.update(eepromPointer++, 0x07); // whiteKeyColor
-    EEPROM.update(eepromPointer++, 0xAD); // whiteKeySV
-    EEPROM.update(eepromPointer++, 0x01); // blackKeyColor
-    EEPROM.update(eepromPointer++, 0xAD); // blackKeySV
+    EEPROM.update(eepromPointer++, defaultConfig[i][5]); // keyAnimation
+    EEPROM.update(eepromPointer++, defaultConfig[i][6]); // whiteKeyColor
+    EEPROM.update(eepromPointer++, defaultConfig[i][7]); // whiteKeySV
+    EEPROM.update(eepromPointer++, defaultConfig[i][8]); // blackKeyColor
+    EEPROM.update(eepromPointer++, defaultConfig[i][9]); // blackKeySV
   }
 }
 
@@ -1196,131 +1064,58 @@ void saveConfigNum(uint8_t _configNum) {
   EEPROM.update(eepromPointer, _configNum < NUM_SAVE_SLOTS ? _configNum : 0);
 }
 
+bool checkDataInList(uint8_t list[], uint8_t listLen, int& readPointer, uint8_t& writeBack) {
+  uint8_t rawData = EEPROM.read(readPointer++);
+#ifdef DEBUG
+  Serial.print("In List: ");
+  Serial.println(rawData, HEX);
+#endif
+  for (int i = 0; i < listLen; ++i) {
+    if (list[i] == rawData) {
+      writeBack = rawData;
+      return true;
+    }
+  }
+#ifdef DEBUG
+  Serial.println("^not in list");
+#endif
+  writeBack = list[0];
+  return false;
+}
+
+bool readSVEEPROM(int& readPointer, uint8_t& writeBack) {
+  uint8_t rawData = EEPROM.read(readPointer++);
+#ifdef DEBUG
+  Serial.print("ReadSV: ");
+  Serial.println(rawData, HEX);
+#endif
+  if ((rawData & 0x0F) > MAX_BRIGHTNESS) { // Brigthness limit check
+    rawData = (rawData & 0xF0) | MAX_BRIGHTNESS;
+    writeBack = rawData;
+#ifdef DEBUG
+    Serial.println("^brigthness limit error");
+#endif
+    return false;
+  }
+  writeBack = rawData;
+  return true;
+}
+
 bool loadSetting(uint8_t _configNum) {
   int eepromPointer = projectTitleLength + 1 + _configNum * CONFIG_SIZE;
-  uint8_t rawData;
   bool noError = true;
-  bool dataValid;
 
-  // bgAnimation
-  rawData = EEPROM.read(eepromPointer++); dataValid = false;
-#ifdef DEBUG
-  Serial.println(rawData, HEX);
-#endif
-  for (int i = 0; i < bgAnimationNum; ++i) {
-    if (bgAnimationList[i] == rawData) {
-      bgAnimation = rawData;
-      dataValid = true;
-      break;
-    }
-  }
-  noError &= dataValid;
+  noError &= checkDataInList(bgAnimationList, bgAnimationNum, eepromPointer, bgAnimation);
+  noError &= checkDataInList(bgColorList, bgColorNum, eepromPointer, bgColorIdle);
+  noError &= readSVEEPROM(eepromPointer, bgSVIdle);
+  noError &= checkDataInList(bgColorList, bgColorNum, eepromPointer, bgColorActivated);
+  noError &= readSVEEPROM(eepromPointer, bgSVActivated);
 
-  // bgColorIdle
-  rawData = EEPROM.read(eepromPointer++); dataValid = false;
-#ifdef DEBUG
-  Serial.println(rawData, HEX);
-#endif
-  for (int i = 0; i < bgColorNum; ++i) {
-    if (bgColorList[i] == rawData) {
-      bgColorIdle = rawData;
-      dataValid = true;
-      break;
-    }
-  }
-  noError &= dataValid;
-
-  // bgSVIdle
-  rawData = EEPROM.read(eepromPointer++);
-#ifdef DEBUG
-  Serial.println(rawData, HEX);
-#endif
-  bgSVIdle = rawData;
-
-  // bgColorActivated
-  rawData = EEPROM.read(eepromPointer++); dataValid = false;
-#ifdef DEBUG
-  Serial.println(rawData, HEX);
-#endif
-  for (int i = 0; i < bgColorNum; ++i) {
-    if (bgColorList[i] == rawData) {
-      bgColorActivated = rawData;
-      dataValid = true;
-      break;
-    }
-  }
-  noError &= dataValid;
-
-  // bgSVActivated
-  rawData = EEPROM.read(eepromPointer++);
-#ifdef DEBUG
-  Serial.println(rawData, HEX);
-#endif
-  bgSVActivated = rawData;
-
-
-  // keyAnimation
-  rawData = EEPROM.read(eepromPointer++); dataValid = false;
-#ifdef DEBUG
-  Serial.println(rawData, HEX);
-#endif
-  for (int i = 0; i < keyAnimationNum; ++i) {
-    if (keyAnimationList[i] == rawData) {
-      keyAnimation = rawData;
-      dataValid = true;
-      break;
-    }
-  }
-  noError &= dataValid;
-
-  // whiteKeyColor
-  rawData = EEPROM.read(eepromPointer++); dataValid = false;
-#ifdef DEBUG
-  Serial.println(rawData, HEX);
-#endif
-  for (int i = 0; i < keyColorNum; ++i) {
-    if (keyColorList[i] == rawData) {
-      whiteKeyColor = rawData;
-      dataValid = true;
-      break;
-    }
-  }
-  noError &= dataValid;
-
-  // whiteKeySV
-  rawData = EEPROM.read(eepromPointer++);
-#ifdef DEBUG
-  Serial.println(rawData, HEX);
-#endif
-  whiteKeySV = rawData;
-
-  // blackKeyColor
-  rawData = EEPROM.read(eepromPointer++); dataValid = false;
-#ifdef DEBUG
-  Serial.println(rawData, HEX);
-#endif
-  for (int i = 0; i < keyColorNum; ++i) {
-    if (keyColorList[i] == rawData) {
-      blackKeyColor = rawData;
-      dataValid = true;
-      break;
-    }
-  }
-  noError &= dataValid;
-
-  // blackKeySV
-  rawData = EEPROM.read(eepromPointer++);
-#ifdef DEBUG
-  Serial.println(rawData, HEX);
-#endif
-  blackKeySV = rawData;
-
-#ifdef DEBUG
-  if (!noError) {
-    Serial.print("Error in config ");
-    Serial.println(_configNum);
-  }
-#endif
+  noError &= checkDataInList(keyAnimationList, keyAnimationNum, eepromPointer, keyAnimation);
+  noError &= checkDataInList(keyColorList, keyColorNum, eepromPointer, whiteKeyColor);
+  noError &= readSVEEPROM(eepromPointer, whiteKeySV);
+  noError &= checkDataInList(keyColorList, keyColorNum, eepromPointer, blackKeyColor);
+  noError &= readSVEEPROM(eepromPointer, blackKeySV);
 
   updateKeyAnimation();
   return noError;
@@ -1384,17 +1179,17 @@ inline void deactivateKey(KeyData& currentKey) {
 }
 
 void midiInputCheck() {
-  uint8_t outBuf[3];
+  uint8_t outBuf[4];
   uint8_t size;
 
   do {
-    if ( (size = Midi.RecvData(outBuf)) > 0 ) {
+    if ( (size = Midi.RecvRawData(outBuf)) > 0 ) {
 
 #ifdef DEBUG
-      Serial.print("midi_in[");
+      Serial.print("MIDI[");
       Serial.print(size);
       Serial.print("] = [ ");
-      for (int i = 0; i < size; ++i) {
+      for (int i = 0; i <= size; ++i) { // size is the midi message size!
         Serial.print("0x");
         Serial.print(outBuf[i], HEX);
         Serial.print(" ");
@@ -1402,10 +1197,16 @@ void midiInputCheck() {
       Serial.println("]");
 #endif
 
-      uint8_t statusCode = outBuf[0] & 0xF0;
+#ifdef MIDI_LOOPBACK
+      midiEventPacket_t event = {outBuf[0], outBuf[1], outBuf[2], outBuf[3]};
+      MidiUSB.sendMIDI(event);
+      MidiUSB.flush();
+#endif
+
+      uint8_t statusCode = outBuf[1] & 0xF0;
       if (statusCode == 0x80 || statusCode == 0x90) {
-        uint8_t pitch = outBuf[1] + MIDI_OFFSET;
-        uint8_t velocity = outBuf[2];
+        uint8_t pitch = outBuf[2] + MIDI_OFFSET;
+        uint8_t velocity = outBuf[3];
         if (statusCode == 0x80 || velocity == 0) { // 0x80 note off
           for (int i = 0; i < NUM_KEYS; ++i) {
             if (keyMidiMap[i] == pitch) {
@@ -1419,18 +1220,18 @@ void midiInputCheck() {
               activateKey(keyData[i], velocity);
               if (settingStatus) {
                 switch (i) {
-                  case 0: prevStyle(); break;
-                  case 1: nextStyle(); break;
-                  case 2: prevSetting(); break;
-                  case 3: nextSetting(); break;
+                  case 0: prevStyle(); break; // A0
+                  case 1: nextStyle(); break; // A#0
+                  case 2: prevSetting(); break; // B0
+                  case 3: nextSetting(); break; // C1
 
-                  case 82: switchToConfig(0); break;
-                  case 83: switchToConfig(1); break;
-                  case 84: switchToConfig(2); break;
-                  case 85: switchToConfig(3); break;
-                  case 86: switchToConfig(4); break;
+                  case 82: switchToConfig(0); break; // g7
+                  case 83: switchToConfig(1); break; // G#7
+                  case 84: switchToConfig(2); break; // A7
+                  case 85: switchToConfig(3); break; // A#7
+                  case 86: switchToConfig(4); break; // B7
 
-                  case 87:
+                  case 87: // C8
                     saveCurrentConfig(configNum);
                     saveConfigNum(configNum);
                     settingStatus = 0x00;
@@ -1520,9 +1321,13 @@ void setup() {
   }
 
   systemStatus = 0x20; // seeking midi
-  delay(200);
-  checkSavedConfig();
+
+#ifndef TEST_STYLE
   settingStatus = 0x10;
+  checkSavedConfig();
+#else
+  settingStatus = 0x00;
+#endif
 }
 
 void loop() {

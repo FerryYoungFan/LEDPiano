@@ -18,6 +18,9 @@ U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ 12, /* data=*/ 13, /* reset=*
 uint8_t mode = 0; // 0:mode select, 1:setting, 2:config select, 3:run keys, 4:one key
 bool testKeyStatus[5] = {true, true, true, true, true};
 
+const static uint8_t numChord = 10;
+const static uint8_t chordList[numChord] = {0, 4, 7, 10, 12, 16, 19, 22, 24, 28};
+
 bool allKeyIdle() {
   for (int i = 0; i < 5; ++i) {
     if (!testKeyStatus[i]) {
@@ -243,9 +246,11 @@ void key4Press() {
 
     case 3:
     case 4:
-      usbMIDI.sendNoteOn(currentKey, randVelocity, 1);
-      usbMIDI.sendNoteOn(currentKey + 4, randVelocity, 1);
-      usbMIDI.sendNoteOn(currentKey + 7, randVelocity, 1);
+      for (int i = 0; i < numChord; ++i) {
+        if (currentKey + chordList[i] < 128) {
+          usbMIDI.sendNoteOn(currentKey + chordList[i], randVelocity, 1);
+        }
+      }
       break;
 
     default: break;
@@ -270,10 +275,11 @@ void key4Release() {
 
     case 3:
     case 4:
-      usbMIDI.sendNoteOff(currentKey, 0, 1);
-      usbMIDI.sendNoteOff(currentKey + 4, 0, 1);
-      usbMIDI.sendNoteOff(currentKey + 7, 0, 1);
-
+      for (int i = 0; i < numChord; ++i) {
+        if (currentKey + chordList[i] < 128) {
+          usbMIDI.sendNoteOff(currentKey + chordList[i], 0, 1);
+        }
+      }
     default: break;
   }
 }
