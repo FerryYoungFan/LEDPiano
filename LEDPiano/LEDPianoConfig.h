@@ -1,8 +1,8 @@
 /* LED Piano V001
-   by @Fanseline, 20220613
+   by @Fanseline, 20220614
 
    Hardware:
-     1. Arduino UNO R3
+     1. Arduino UNO R3 / Leonardo R3
      2. USB Host Shield 2.0:
         Hardware manual: https://chome.nerpa.tech/usb-host-shield-hardware-manual/
         Soldered as: https://chome.nerpa.tech/wp/wp-content/uploads/2011/02/uhs20s_pin_layout.jpg
@@ -35,7 +35,7 @@
 
 /* ****************** Static Configurations ****************** */
 
-#define NUM_LEDS 175 // Max NUM_LEDS = 180
+#define NUM_LEDS 175 // Number of LEDs on your strip, max = 180
 #define NUM_KEYS 88
 
 #define STRIP_PIN A0
@@ -50,8 +50,9 @@
 /*
    Brightness limit (power limit)
    Consider external power supply for LED strip.
-   If you directly use the 5V pin for LED strip, please set this value lower than 0x08
-   to avoid voltage drop.
+   If you directly use the on-board 5V pin for LED strip, please set this value
+   lower than 0x08 to avoid harmful voltage drop.
+
    min=0x01, max=0x0F, default=0x08
 */
 #define MAX_BRIGHTNESS 0x08
@@ -60,9 +61,25 @@
 #define NUM_SAVE_SLOTS 5
 #define NUM_SETTING_KEYS 4 // Leftmost 4 keys for setting
 
-const static char projectTitle[] = "FanLEDPiano V001";
 const static uint8_t projectTitleLength = 16;
+const static char projectTitle[projectTitleLength + 1] = "FanLEDPiano V001"; // Modify title will reset EEPROM!
 
+/*
+   MIDI keyboard - LED mapping (LED number starts from left)
+   ●: LED mapped to key
+   ○: LED not mapped to key
+
+   0  2  4  6  8                                                                  174
+   ●○●○●○●○●○●○●○●○●○●○●○●○●   ... ... ●○●○●○●○●○●○●○●○●○●○●○●
+   ______________________________________ ... ... __________________________________
+   |  | |  |  | | | |  |  | | | | | |  |           |  | | | |  |  | | | | | |  |   |
+   |  | |  |  | | | |  |  | | | | | |  |           |  | | | |  |  | | | | | |  |   |
+   |  | |  |  | | | |  |  | | | | | |  |           |  | | | |  |  | | | | | |  |   |
+   |  |_|  |  |_| |_|  |  |_| |_| |_|  |  ... ...  |  |_| |_|  |  |_| |_| |_|  |   |
+   |   |   |   |   |   |   |   |   |   |           |   |   |   |   |   |   |   |   |
+   |   |   |   |   |   |   |   |   |   |           |   |   |   |   |   |   |   |   |
+   |___|___|___|___|___|___|___|___|___|           |___|___|___|___|___|___|___|___|
+*/
 const static uint8_t keyLedMap[NUM_KEYS] =
 { 0, 2, 4, // A0 -> B0
   6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, // C1 -> B1
@@ -75,6 +92,24 @@ const static uint8_t keyLedMap[NUM_KEYS] =
   174 // C8
 };
 
+/*
+      MIDI code vs piano keys (A4 = 440Hz)
+   MIDI Code  HEX Code  Piano Key  Note Name  Frequency (Hz)
+   108        0x6C      88         C8         4186.01
+   107        0x6B      87         B7         3951.07
+   106        0x6A      86         A#/Bb7     3729.31
+   105        0x69      85         A7         3520.00
+   104        0x68      84         G#/Ab7     3322.44
+   103        0x67      83         G7         3135.96
+                           ... ...
+    (Check full table: /Misc/MIDI_Code_vs_Piano_Key.txt)
+                           ... ...
+   25         0x19      5          C#/Db1     34.65
+   24         0x18      4          C1         32.70
+   23         0x17      3          B0         30.87
+   22         0x16      2          A#/Bb0     29.14
+   21         0x15      1          A0         27.50
+*/
 const static uint8_t keyMidiMap[NUM_KEYS] =
 { 21, 22, 23, // A0 -> B0
   24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, // C1 -> B1
@@ -87,6 +122,14 @@ const static uint8_t keyMidiMap[NUM_KEYS] =
   108 // C8
 };
 
+/* Setting Demo LEDs config
+   settingLedLeft: show which stytle is under adjusting
+   styleNumLed: show current style number using 8 LEDs (display uint8_t number)
+   settingLedRight: turn off these LEDs to emphasize config slots
+
+     ○○○○○○○○  ●●●●●●●●  ◑◑◑◑◑◑◑◑◑◑◑ ... ◑◑◑◑◑◑◑◑◑◑◑◑◑◑  ○○○○○○○○○○○○
+   | SettingLeft |  StyleNum  |               StyleDemo                   | SettingRight(Slots) |
+*/
 const static uint8_t settingLedLeftStart = 0;
 const static uint8_t settingLedLeftEnd = 7;
 const static uint8_t styleNumLedStart = 8;
@@ -94,9 +137,32 @@ const static uint8_t styleNumLedEnd = 15;
 const static uint8_t settingLedRightStart = 163;
 const static uint8_t settingLedRightEnd = 174;
 
-const static uint8_t slotKeys[NUM_SAVE_SLOTS] = {82, 83, 84, 85, 86}; // from G7 to B7, index of keyData[]
+/*
+   Setting configuration on MIDI keyboard
+   ______________________________________ ... ... __________________________________
+   |  | |  |  | | | |  |  | | | | | |  |           |  | | | |  |  | | | | | |  |   |
+   |  | |  |  | | | |  |  | | | | | |  |           |  | | | |  |  | | | | | |  |   |
+   |  | |  |  | | | |  |  | | | | | |  |           |  | | | |  |  | | | | | |  |   |
+   |  |_|  |  |_| |_|  |  |_| |_| |_|  |  ... ...  |  |_| |_|  |  |_| |_| |_|  |   |
+   |   |   |   |   |   |   |   |   |   |           |   |   |   |   |   |   |   |   |
+   |   |   |   |   |   |   |   |   |   |           |   |   |   |   |   |   |   |   |
+   |___|___|___|___|___|___|___|___|___|           |___|___|___|___|___|___|___|___|
+     | | |   |                                                       | | | | |   |
+     | | |   |__nextSetting(C1)                           slot0(G7)__| | | | |   |
+     | | |                                                             | | | |   |
+     | | |__prevSetting(B0)                                slot1(G#7)__| | | |   |
+     | |                                                                 | | |   |
+     | |__nextStyle(A#0)                                      slot2(A7)__| | |   |
+     |                                                                     | |   |
+     |__prevStyle(A0)                                          slot3(A#7)__| |   |
+                                                                             |   |
+                                                                  slot4(B7)__|   |
+                                                                                 |
+                                                           confirm & save(C8)____|
+*/
+const static uint8_t slotKeys[NUM_SAVE_SLOTS] = {82, 83, 84, 85, 86}; // from G7 to B7, index of keyData[]: slot0 - slot4
+const static uint8_t settingKeys[NUM_SETTING_KEYS] = {0, 1, 2, 3}; // from A0 to C1, index of keyData[]: prevStyle, nextStyle, prevSetting, nextSetting
 const static uint8_t confirmKey = 87; // C8, index of keyData[]
-const static uint8_t settingKeys[NUM_SETTING_KEYS] = {0, 1, 2, 3}; // from A0 to C1, index of keyData[]
 
 const static uint8_t bgAnimationNum = 13;
 const static uint8_t bgAnimationList[bgAnimationNum] =
@@ -104,6 +170,7 @@ const static uint8_t bgAnimationList[bgAnimationNum] =
   0x10, 0x11, 0x12, 0x13, 0x14,
   0x20, 0x21, 0x22, 0x23, 0x24, 0x25
 }; // List for blendFgColors()
+
 const static uint8_t keyAnimationNum = 10;
 const static uint8_t keyAnimationList[keyAnimationNum] =
 {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}; // List for updateKeyAnimation()
@@ -114,6 +181,7 @@ const static uint8_t bgColorList[bgColorNum] =
   0x80 | 0, 0x80 | 1, 0x80 | 2, 0x80 | 3, 0x80 | 4, 0x80 | 5, 0x80 | 6, 0x80 | 7, // Gradient one cycle
   0xE0 | 0, 0xE0 | 1, 0xE0 | 2, 0xE0 | 3, 0xE0 | 4, 0xE0 | 5, 0xE0 | 6, 0xE0 | 7, // Gradient multi-cycle
 }; // List for getColorByCode()
+
 const static uint8_t keyColorNum = 28;
 const static uint8_t keyColorList[keyColorNum] =
 { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, // Pure color
@@ -157,7 +225,7 @@ uint8_t configNum = 0; // Load from or save to which slot
 // Notice: you can test the following style when TEST_STYLE is defined
 uint8_t bgAnimation = 0x01;
 uint8_t bgColorIdle = 0x01; // Hue or gradient color
-uint8_t bgSVIdle = 0x00; // Saturation & Brightness
+uint8_t bgSVIdle = 0x00; // 0x0? - 0xF?: Saturation,  0x?0 - 0x?F: Brightness
 uint8_t bgColorActivated = 0x01;
 uint8_t bgSVActivated = 0x00;
 
