@@ -14,41 +14,42 @@ U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ 12, /* data=*/ 13, /* reset=*
 #define START_NOTE 21 // A0
 #define STOP_NOTE 108 // C8
 
+#define TRIGGER_LEVEL true
+#define IDLE_LEVEL false
 
 uint8_t mode = 0; // 0:mode select, 1:setting, 2:config select, 3:run keys, 4:one key
-bool testKeyStatus[5] = {true, true, true, true, true};
+bool testKeyStatus[5] = {IDLE_LEVEL, IDLE_LEVEL, IDLE_LEVEL, IDLE_LEVEL, IDLE_LEVEL};
+bool ledStatus = false;
+int ledCounter = 0;
 
 const static uint8_t numChord = 10;
 const static uint8_t chordList[numChord] = {0, 4, 7, 10, 12, 16, 19, 22, 24, 28};
 
+uint8_t currentKey = 60; // C4
+
 bool allKeyIdle() {
   for (int i = 0; i < 5; ++i) {
-    if (!testKeyStatus[i]) {
+    if (testKeyStatus[i] == TRIGGER_LEVEL) {
       return false;
     }
   }
   return true;
 }
 
-uint8_t currentKey = 60; // C4
-
 void blinkLed(int times) {
-  for (int i = 0; i < times; ++i) {
-    digitalWrite(LED_PIN, HIGH);
-    delay(200);
-    digitalWrite(LED_PIN, LOW);
-    delay(200);
-  }
+  ledCounter = times;
+  ledStatus = false;
+  digitalWrite(LED_PIN, LOW);
 }
 
 void key0Press() {
   mode = 0;
-  showOnScreen();
   blinkLed(1);
+  showOnScreen();
 }
 
 void key0Release() {
-
+  // Do nothing
 }
 
 void key1Press() {
@@ -56,8 +57,8 @@ void key1Press() {
   switch (mode) {
     case 0:
       mode = 1;
-      showOnScreen();
       blinkLed(1);
+      showOnScreen();
       break;
 
     case 1:
@@ -116,11 +117,12 @@ void key1Release() {
 }
 
 void key2Press() {
+  int randVelocity = random(10, 127);
   switch (mode) {
     case 0:
       mode = 2;
-      showOnScreen();
       blinkLed(2);
+      showOnScreen();
       break;
 
     case 1:
@@ -133,7 +135,6 @@ void key2Press() {
 
     case 3:
     case 4:
-      int randVelocity = random(10, 127);
       usbMIDI.sendNoteOn(currentKey, randVelocity, 1);
       break;
 
@@ -168,8 +169,8 @@ void key3Press() {
   switch (mode) {
     case 0:
       mode = 3;
-      showOnScreen();
       blinkLed(3);
+      showOnScreen();
       break;
 
     case 1:
@@ -232,8 +233,8 @@ void key4Press() {
   switch (mode) {
     case 0:
       mode = 4;
-      showOnScreen();
       blinkLed(4);
+      showOnScreen();
       break;
 
     case 1:
@@ -289,7 +290,7 @@ void keyPressCheck() {
     int testKeyPin = TEST_KEY_0 + k;
     bool val = digitalRead(testKeyPin);
     if (val != testKeyStatus[k]) {
-      if (val) {
+      if (val == IDLE_LEVEL) {
         switch (k) {
           case 0: key0Release(); break;
           case 1: key1Release(); break;
@@ -298,8 +299,6 @@ void keyPressCheck() {
           case 4: key4Release(); break;
           default: break;
         }
-        testKeyStatus[k] = val;
-
       } else {
         if (allKeyIdle()) {
           switch (k) {
@@ -310,10 +309,9 @@ void keyPressCheck() {
             case 4: key4Press(); break;
             default: break;
           }
-          testKeyStatus[k] = val;
         }
       }
-
+      testKeyStatus[k] = val;
     }
   }
 }
@@ -390,15 +388,31 @@ void showOnScreen() {
   }
 }
 
+void ledCheck() {
+  if (ledStatus) {
+    ledStatus = false;
+    digitalWrite(LED_PIN, LOW);
+  } else {
+    if (ledCounter > 0) {
+      ledStatus = true;
+      digitalWrite(LED_PIN, HIGH);
+      --ledCounter;
+    }
+  }
+}
+
 Ticker keyTimer(keyPressCheck, 1000 / 144);
+Ticker ledTimer(ledCheck, 200);
 
 void setup() {
+  pinMode(TEST_KEY_0, INPUT);
   pinMode(TEST_KEY_1, INPUT);
   pinMode(TEST_KEY_2, INPUT);
   pinMode(TEST_KEY_3, INPUT);
   pinMode(TEST_KEY_4, INPUT);
   pinMode(LED_PIN, OUTPUT);
   keyTimer.start();
+  ledTimer.start();
 
   delay(200);
   u8x8.begin();
@@ -408,4 +422,5 @@ void setup() {
 
 void loop() {
   keyTimer.update();
+  ledTimer.update();
 }
