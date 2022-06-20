@@ -54,10 +54,10 @@ void setupKeyAnimation() {
 
   // Notice: Remember to add your new code to keyAnimationList[]
   switch (keyAnimation) {
-    case 0: // No key press effect
+    case 0: // ↑↘↓ without rendering
       increaseFactor = 0.0;
-      fadeFactorPress = 0.0;
-      fadeFactorRelease = 0.0;
+      fadeFactorPress = fadeSlow;
+      fadeFactorRelease = fadeFast;
       break;
 
     case 1: // ↑↘↓

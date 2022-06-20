@@ -63,57 +63,85 @@ void settingControl(uint8_t keyIndex) {
   }
 }
 
+#ifdef DEBUG
+void debugPrintMidi(uint8_t outBuf[], uint8_t size) {
+  Serial.print("MIDI[");
+  Serial.print((size + 1));
+  Serial.print("] = [ ");
+  for (uint8_t i = 0; i <= size; ++i) { // MIDI message size, not buffer size
+    Serial.print("0x");
+    Serial.print(outBuf[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println("]");
+}
+#endif
+
+void processMidi(uint8_t outBuf[]) {
+  uint8_t statusCode = outBuf[1] & 0xF0;
+  if (statusCode == 0x80 || statusCode == 0x90) {
+    uint8_t pitch = outBuf[2] + MIDI_OFFSET;
+    uint8_t velocity = outBuf[3];
+    if (statusCode == 0x80 || velocity == 0) { // 0x80 note off
+      for (uint8_t i = 0; i < NUM_KEYS; ++i) {
+        if (keyMidiMap[i] == pitch) {
+          deactivateKey(keyData[i]);
+          break;
+        }
+      }
+    } else { // 0x90 note on
+      for (uint8_t i = 0; i < NUM_KEYS; ++i) {
+        if (keyMidiMap[i] == pitch) {
+          activateKey(keyData[i], velocity);
+          if (settingStatus) {
+            settingControl(i);
+          }
+          break;
+        }
+      }
+    }
+  }
+}
+
 void midiInputCheck() {
   uint8_t outBuf[4];
   uint8_t size;
-
+#ifdef MIDI_LOOPBACK
+  midiEventPacket_t event;
+#endif
   do {
     if ( (size = Midi.RecvRawData(outBuf)) > 0 ) {
 
 #ifdef DEBUG
-      Serial.print("MIDI[");
-      Serial.print(size);
-      Serial.print("] = [ ");
-      for (int i = 0; i <= size; ++i) { // MIDI message size, not buffer size
-        Serial.print("0x");
-        Serial.print(outBuf[i], HEX);
-        Serial.print(" ");
-      }
-      Serial.println("]");
+      debugPrintMidi(outBuf, size);
 #endif
 
 #ifdef MIDI_LOOPBACK
-      midiEventPacket_t event = {outBuf[0], outBuf[1], outBuf[2], outBuf[3]};
+      event.header = outBuf[0];
+      event.byte1 = outBuf[1];
+      event.byte2 = outBuf[2];
+      event.byte3 = outBuf[3];
       MidiUSB.sendMIDI(event);
       MidiUSB.flush();
 #endif
 
-      uint8_t statusCode = outBuf[1] & 0xF0;
-      if (statusCode == 0x80 || statusCode == 0x90) {
-        uint8_t pitch = outBuf[2] + MIDI_OFFSET;
-        uint8_t velocity = outBuf[3];
-        if (statusCode == 0x80 || velocity == 0) { // 0x80 note off
-          for (uint8_t i = 0; i < NUM_KEYS; ++i) {
-            if (keyMidiMap[i] == pitch) {
-              deactivateKey(keyData[i]);
-              break;
-            }
-          }
-        } else { // 0x90 note on
-          for (uint8_t i = 0; i < NUM_KEYS; ++i) {
-            if (keyMidiMap[i] == pitch) {
-              activateKey(keyData[i], velocity);
-              if (settingStatus) {
-                settingControl(i);
-              }
-              break;
-            }
-          }
-        }
-      }
-
+      processMidi(outBuf);
     }
   } while (size > 0);
+
+#ifdef MIDI_LOOPBACK
+  do {
+    event = MidiUSB.read();
+    if (event.header != 0) {
+      outBuf[0] = event.header;
+      outBuf[1] = event.byte1;
+      outBuf[2] = event.byte2;
+      outBuf[3] = event.byte3;
+      processMidi(outBuf);
+    }
+  } while (event.header != 0);
+#endif
+
 }
 
 void showError() {
@@ -157,6 +185,15 @@ void midiCheckLoop() {
     }
 
   } else { // !Midi
+
+#ifdef MIDI_LOOPBACK
+    // Empty buffer to avoid overflow
+    midiEventPacket_t event;
+    do {
+      event = MidiUSB.read();
+    } while (event.header != 0);
+#endif
+
     if (codeHeader == 0x30) { // previously main or setting status
       systemStatus = (systemStatus & 0x0F) | 0x20; // seeking midi
       ledTimer.stop();

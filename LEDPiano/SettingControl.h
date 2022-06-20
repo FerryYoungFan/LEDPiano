@@ -1,7 +1,7 @@
 #ifndef SETTING_CONTROL_H
 #define SETTING_CONTROL_H
 
-#include "LEDPianoConfig.h"
+#include "KeyControl.h"
 
 uint8_t getNextListData(uint8_t list[], uint8_t listStart, uint8_t listEnd, uint8_t currentData) {
   int settingIndex = -1;
@@ -70,6 +70,7 @@ void nextStyle() {
 
     case 0x20: // keyAnimation
       keyAnimation = getNextListData(keyAnimationList, 0, keyAnimationNum, keyAnimation);
+      setupKeyAnimation();
       break;
 
     case 0x21: // whiteKeyColor
@@ -167,6 +168,7 @@ void prevStyle() {
 
     case 0x20: // keyAnimation
       keyAnimation = getPrevListData(keyAnimationList, 0, keyAnimationNum, keyAnimation);
+      setupKeyAnimation();
       break;
 
     case 0x21: // whiteKeyColor
