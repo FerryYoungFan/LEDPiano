@@ -7,3 +7,6 @@
 
 ### Recommended Library for making MIDI video:
 1. MIDIVisualizer (make piano roll video): https://github.com/kosua20/MIDIVisualizer
+
+### Recommended Library for MIDI debug (Leonardo R3):
+1. Pocket MIDI https://www.morson.jp/pocketmidi-webpage/
