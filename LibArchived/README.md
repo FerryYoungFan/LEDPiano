@@ -5,8 +5,9 @@
 3. USB Host Shield 2.0: https://github.com/felis/USB_Host_Shield_2.0
 4. MIDIUSB (for Leonardo MIDI Loopback) https://github.com/arduino-libraries/MIDIUSB
 
-### Recommended Library for making MIDI video:
+### Recommended Software for making MIDI video:
 1. MIDIVisualizer (make piano roll video): https://github.com/kosua20/MIDIVisualizer
+2. Piano VFX (Windows only): https://www.piano-vfx.com/
 
-### Recommended Library for MIDI debug (Leonardo R3):
+### Recommended Software for MIDI debug (Leonardo R3):
 1. Pocket MIDI https://www.morson.jp/pocketmidi-webpage/

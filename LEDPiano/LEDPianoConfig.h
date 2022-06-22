@@ -1,5 +1,5 @@
 /* LED Piano V002
-   by @Fanseline, 20220620
+   by @Fanseline, 20220622
 
    Hardware:
      1. Arduino UNO R3 / Leonardo R3
@@ -13,8 +13,6 @@
      2. FastLED: https://github.com/FastLED/FastLED
      3. USB Host Shield 2.0: https://github.com/felis/USB_Host_Shield_2.0
      4. MIDIUSB (for Leonardo MIDI Loopback) https://github.com/arduino-libraries/MIDIUSB
-     5. MIDIVisualizer (make piano roll video): https://github.com/kosua20/MIDIVisualizer
-     6. Pocket MIDI (MIDI debug) https://www.morson.jp/pocketmidi-webpage/
 */
 
 #ifndef LED_PIANO_CONFIG_H
