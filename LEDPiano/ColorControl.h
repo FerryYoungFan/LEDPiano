@@ -23,9 +23,9 @@ CRGB getGradientColor(int hueCount, int huePeriod, uint8_t startHue, uint8_t sto
 CRGB getColorByCode(uint8_t colorCode, int hueCount, int huePeriod, uint8_t sat, uint8_t bri) {
   // Notice: Remember to add your new color code to bgColorList[] and keyColorList[]
   const static uint8_t red = 0;
-  const static uint8_t orange = 17;
-  const static uint8_t yellow = 38;
-  const static uint8_t yellowGreen = 66;
+  const static uint8_t orange = 20;
+  const static uint8_t yellow = 45;
+  const static uint8_t yellowGreen = 70;
   const static uint8_t green = 92;
   const static uint8_t cyan = 120;
   const static uint8_t blue = 154;

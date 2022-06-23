@@ -64,11 +64,11 @@ void settingControl(uint8_t keyIndex) {
 }
 
 #ifdef DEBUG
-void debugPrintMidi(uint8_t outBuf[], uint8_t size) {
+void debugPrintMidi(uint8_t outBuf[], uint16_t size) {
   Serial.print("MIDI[");
   Serial.print((size + 1));
   Serial.print("] = [ ");
-  for (uint8_t i = 0; i <= size; ++i) { // MIDI message size, not buffer size
+  for (uint16_t i = 0; i <= size; ++i) { // MIDI message size, not buffer size
     Serial.print("0x");
     Serial.print(outBuf[i], HEX);
     Serial.print(" ");
@@ -105,18 +105,15 @@ void processMidi(uint8_t outBuf[]) {
 
 void midiInputCheck() {
   uint8_t outBuf[4];
-  uint8_t size;
-#ifdef MIDI_LOOPBACK
+  uint16_t size;
+#ifdef PIANO_TO_COMPUTER
   midiEventPacket_t event;
 #endif
   do {
     if ( (size = Midi.RecvRawData(outBuf)) > 0 ) {
 
-#ifdef DEBUG
-      debugPrintMidi(outBuf, size);
-#endif
-
-#ifdef MIDI_LOOPBACK
+#ifdef PIANO_TO_COMPUTER
+      // Send MIDI packet from instrument to computer (host)
       event.header = outBuf[0];
       event.byte1 = outBuf[1];
       event.byte2 = outBuf[2];
@@ -125,18 +122,27 @@ void midiInputCheck() {
       MidiUSB.flush();
 #endif
 
+#ifdef DEBUG
+      debugPrintMidi(outBuf, size);
+#endif
+
       processMidi(outBuf);
     }
   } while (size > 0);
 
-#ifdef MIDI_LOOPBACK
+#ifdef PIANO_TO_COMPUTER
   do {
-    event = MidiUSB.read();
+    event = MidiUSB.read(); // receive MIDI packet from computer (host)
     if (event.header != 0) {
       outBuf[0] = event.header;
       outBuf[1] = event.byte1;
       outBuf[2] = event.byte2;
       outBuf[3] = event.byte3;
+
+#ifdef COMPUTER_TO_PIANO
+      Midi.SendRawData(4, outBuf); // send MIDI data to instrument
+#endif
+
       processMidi(outBuf);
     }
   } while (event.header != 0);
@@ -186,7 +192,7 @@ void midiCheckLoop() {
 
   } else { // !Midi
 
-#ifdef MIDI_LOOPBACK
+#ifdef PIANO_TO_COMPUTER
     // Empty buffer to avoid overflow
     midiEventPacket_t event;
     do {
@@ -229,6 +235,7 @@ void setup() {
   settingStatus = 0x10;
   checkSavedConfig();
 #else
+  // will start up as the style you preset if TEST_STYLE is defined
   settingStatus = 0x00;
 #endif
 }

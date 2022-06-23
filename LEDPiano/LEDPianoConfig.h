@@ -20,7 +20,14 @@
 
 // #define DEBUG // Print MIDI packet via serial
 // #define TEST_STYLE // Test default style
-// #define MIDI_LOOPBACK // Leonardo R3 can use this feature
+
+/* Leonardo R3 (MEGA32U4) can use the following two features: PIANO_TO_COMPUTER & COMPUTER_TO_PIANO
+   However, loop MIDI to your computer or digital piano may lead to latency issue
+   Comment out these two features if you are using an UNO or just don't need them
+   COMPUTER_TO_PIANO will only be activated when PIANO_TO_COMPUTER is defined
+*/
+// #define PIANO_TO_COMPUTER // Loop MIDI data from digital piano (or MIDI keyboard) to computer (output from Leonardo's built-in USB port)
+// #define COMPUTER_TO_PIANO // Send MIDI data from computer to digital piano (Warning: some digital piano did not support this feature!)
 
 #include "Ticker.h"
 #include <FastLED.h>
@@ -28,7 +35,7 @@
 #include <usbhub.h>
 #include <EEPROM.h>
 
-#ifdef MIDI_LOOPBACK
+#ifdef PIANO_TO_COMPUTER
 #include "MIDIUSB.h"
 #endif
 

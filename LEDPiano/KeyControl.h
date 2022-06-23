@@ -47,7 +47,7 @@ void setupKeyAnimation() {
   const static float increaseNone = 0.0;
   const static float increaseSlow = 0.03;
   const static float increaseFast = 0.97;
-  const static float fadeSlow = 0.95;
+  const static float fadeSlow = 0.97;
   const static float fadeMedian = 0.7;
   const static float fadeFast = 0.3;
   const static float fadeNone = 1.0;

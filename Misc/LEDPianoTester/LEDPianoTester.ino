@@ -1,4 +1,5 @@
 #include "Ticker.h"
+#include "MIDIUSB.h"
 #include <U8x8lib.h>
 // Config for Teensy 2.0
 
@@ -42,6 +43,16 @@ void blinkLed(int times) {
   digitalWrite(LED_PIN, LOW);
 }
 
+void noteOn(uint8_t pitch, uint8_t velocity, uint8_t channel) {
+  midiEventPacket_t noteOn = {0x09, channel | 0x90, pitch, velocity};
+  MidiUSB.sendMIDI(noteOn);
+}
+
+void noteOff(uint8_t pitch, uint8_t velocity, uint8_t channel) {
+  midiEventPacket_t noteOff = {0x08, channel | 0x80, pitch, velocity};
+  MidiUSB.sendMIDI(noteOff);
+}
+
 void key0Press() {
   mode = 0;
   blinkLed(1);
@@ -62,11 +73,11 @@ void key1Press() {
       break;
 
     case 1:
-      usbMIDI.sendNoteOn(21, 100, 1);
+      noteOn(21, 100, 1);
       break;
 
     case 2:
-      usbMIDI.sendNoteOn(103, 100, 1);
+      noteOn(103, 100, 1);
       break;
 
     case 3:
@@ -75,7 +86,7 @@ void key1Press() {
       } else {
         currentKey -= 1;
       }
-      usbMIDI.sendNoteOn(currentKey, randVelocity, 1);
+      noteOn(currentKey, randVelocity, 1);
       showCurrentNote();
       break;
 
@@ -98,15 +109,15 @@ void key1Release() {
       break;
 
     case 1:
-      usbMIDI.sendNoteOff(21, 0, 1);
+      noteOff(21, 0, 1);
       break;
 
     case 2:
-      usbMIDI.sendNoteOff(103, 0, 1);
+      noteOff(103, 0, 1);
       break;
 
     case 3:
-      usbMIDI.sendNoteOff(currentKey, 0, 1);
+      noteOff(currentKey, 0, 1);
       break;
 
     case 4:
@@ -126,16 +137,16 @@ void key2Press() {
       break;
 
     case 1:
-      usbMIDI.sendNoteOn(22, 100, 1);
+      noteOn(22, 100, 1);
       break;
 
     case 2:
-      usbMIDI.sendNoteOn(104, 100, 1);
+      noteOn(104, 100, 1);
       break;
 
     case 3:
     case 4:
-      usbMIDI.sendNoteOn(currentKey, randVelocity, 1);
+      noteOn(currentKey, randVelocity, 1);
       break;
 
     default: break;
@@ -148,16 +159,16 @@ void key2Release() {
       break;
 
     case 1:
-      usbMIDI.sendNoteOff(22, 0, 1);
+      noteOff(22, 0, 1);
       break;
 
     case 2:
-      usbMIDI.sendNoteOff(104, 0, 1);
+      noteOff(104, 0, 1);
       break;
 
     case 3:
     case 4:
-      usbMIDI.sendNoteOff(currentKey, 0, 1);
+      noteOff(currentKey, 0, 1);
       break;
 
     default: break;
@@ -174,11 +185,11 @@ void key3Press() {
       break;
 
     case 1:
-      usbMIDI.sendNoteOn(23, 100, 1);
+      noteOn(23, 100, 1);
       break;
 
     case 2:
-      usbMIDI.sendNoteOn(105, 100, 1);
+      noteOn(105, 100, 1);
       break;
 
     case 3:
@@ -187,7 +198,7 @@ void key3Press() {
       } else {
         currentKey += 1;
       }
-      usbMIDI.sendNoteOn(currentKey, randVelocity, 1);
+      noteOn(currentKey, randVelocity, 1);
       showCurrentNote();
       break;
 
@@ -210,15 +221,15 @@ void key3Release() {
       break;
 
     case 1:
-      usbMIDI.sendNoteOff(23, 0, 1);
+      noteOff(23, 0, 1);
       break;
 
     case 2:
-      usbMIDI.sendNoteOff(105, 0, 1);
+      noteOff(105, 0, 1);
       break;
 
     case 3:
-      usbMIDI.sendNoteOff(currentKey, 0, 1);
+      noteOff(currentKey, 0, 1);
       break;
 
     case 4:
@@ -238,18 +249,18 @@ void key4Press() {
       break;
 
     case 1:
-      usbMIDI.sendNoteOn(24, 100, 1);
+      noteOn(24, 100, 1);
       break;
 
     case 2:
-      usbMIDI.sendNoteOn(108, 100, 1);
+      noteOn(108, 100, 1);
       break;
 
     case 3:
     case 4:
       for (int i = 0; i < numChord; ++i) {
         if (currentKey + chordList[i] < 128) {
-          usbMIDI.sendNoteOn(currentKey + chordList[i], randVelocity, 1);
+          noteOn(currentKey + chordList[i], randVelocity, 1);
         }
       }
       break;
@@ -264,11 +275,11 @@ void key4Release() {
       break;
 
     case 1:
-      usbMIDI.sendNoteOff(24, 0, 1);
+      noteOff(24, 0, 1);
       break;
 
     case 2:
-      usbMIDI.sendNoteOff(108, 0, 1);
+      noteOff(108, 0, 1);
       mode = 3;
       showOnScreen();
       blinkLed(3);
@@ -278,7 +289,7 @@ void key4Release() {
     case 4:
       for (int i = 0; i < numChord; ++i) {
         if (currentKey + chordList[i] < 128) {
-          usbMIDI.sendNoteOff(currentKey + chordList[i], 0, 1);
+          noteOff(currentKey + chordList[i], 0, 1);
         }
       }
     default: break;
@@ -420,7 +431,15 @@ void setup() {
   showOnScreen();
 }
 
+midiEventPacket_t rx;
+
 void loop() {
   keyTimer.update();
   ledTimer.update();
+  do {
+    rx = MidiUSB.read();
+    if (rx.header != 0) {
+      blinkLed(1);
+    }
+  } while (rx.header != 0);
 }
