@@ -65,14 +65,14 @@ bool checkDataInList(uint8_t list[], uint8_t listLen, int& readPointer, uint8_t&
   return false;
 }
 
-bool readSVEEPROM(int& readPointer, uint8_t& writeBack) {
+bool readSVEEPROM(int& readPointer, uint8_t& writeBack, uint8_t maxV) {
   uint8_t rawData = EEPROM.read(readPointer++);
 #ifdef DEBUG
   Serial.print("ReadSV: ");
   Serial.println(rawData, HEX);
 #endif
-  if ((rawData & 0x0F) > MAX_BRIGHTNESS) { // Brigthness limit check
-    rawData = (rawData & 0xF0) | MAX_BRIGHTNESS;
+  if ((rawData & 0x0F) > maxV) { // Brigthness limit check
+    rawData = (rawData & 0xF0) | maxV;
     writeBack = rawData;
 #ifdef DEBUG
     Serial.println("^brigthness limit error");
@@ -89,15 +89,15 @@ bool loadSetting(uint8_t _configNum) {
 
   noError &= checkDataInList(bgAnimationList, bgAnimationNum, eepromPointer, bgAnimation);
   noError &= checkDataInList(bgColorList, bgColorNum, eepromPointer, bgColorIdle);
-  noError &= readSVEEPROM(eepromPointer, bgSVIdle);
+  noError &= readSVEEPROM(eepromPointer, bgSVIdle, MAX_BRIGHTNESS_BG);
   noError &= checkDataInList(bgColorList, bgColorNum, eepromPointer, bgColorActivated);
-  noError &= readSVEEPROM(eepromPointer, bgSVActivated);
+  noError &= readSVEEPROM(eepromPointer, bgSVActivated, MAX_BRIGHTNESS_BG);
 
   noError &= checkDataInList(keyAnimationList, keyAnimationNum, eepromPointer, keyAnimation);
   noError &= checkDataInList(keyColorList, keyColorNum, eepromPointer, whiteKeyColor);
-  noError &= readSVEEPROM(eepromPointer, whiteKeySV);
+  noError &= readSVEEPROM(eepromPointer, whiteKeySV, MAX_BRIGHTNESS_FG);
   noError &= checkDataInList(keyColorList, keyColorNum, eepromPointer, blackKeyColor);
-  noError &= readSVEEPROM(eepromPointer, blackKeySV);
+  noError &= readSVEEPROM(eepromPointer, blackKeySV, MAX_BRIGHTNESS_FG);
 
   setupKeyAnimation();
   return noError;

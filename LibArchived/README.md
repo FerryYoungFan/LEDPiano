@@ -8,6 +8,8 @@
 ### Recommended Software for making MIDI video:
 1. MIDIVisualizer (make piano roll video): https://github.com/kosua20/MIDIVisualizer
 2. Piano VFX (Windows only): https://www.piano-vfx.com/
+3. Embers (Discord account required for watermark removal): https://embers.app/
+4. SeeMusic (Pay for watermark removal) https://www.visualmusicdesign.com/
 
-### Recommended Software for MIDI debug (Leonardo R3):
+### Recommended Software for loopback MIDI debug:
 1. Pocket MIDI https://www.morson.jp/pocketmidi-webpage/

@@ -27,10 +27,10 @@ uint8_t getNextSaturation(uint8_t codeSV) {
   }
 }
 
-uint8_t getNextBrightness(uint8_t codeSV) {
+uint8_t getNextBrightness(uint8_t codeSV, uint8_t maxV) {
   uint8_t sat = codeSV & 0xF0;
   uint8_t bri = codeSV & 0x0F;
-  if (bri >= MAX_BRIGHTNESS) {
+  if (bri >= maxV) {
     return sat;
   } else {
     return sat | (bri + 1);
@@ -53,7 +53,7 @@ void nextStyle() {
       break;
 
     case 0x13: // bgBrightnessIdle
-      bgSVIdle = getNextBrightness(bgSVIdle);
+      bgSVIdle = getNextBrightness(bgSVIdle, MAX_BRIGHTNESS_BG);
       break;
 
     case 0x14: // bgColorActivated
@@ -65,7 +65,7 @@ void nextStyle() {
       break;
 
     case 0x16: // bgBrightnessActivated
-      bgSVActivated = getNextBrightness(bgSVActivated);
+      bgSVActivated = getNextBrightness(bgSVActivated, MAX_BRIGHTNESS_BG);
       break;
 
     case 0x20: // keyAnimation
@@ -82,7 +82,7 @@ void nextStyle() {
       break;
 
     case 0x23: // whiteKeyBrightness
-      whiteKeySV = getNextBrightness(whiteKeySV);
+      whiteKeySV = getNextBrightness(whiteKeySV, MAX_BRIGHTNESS_FG);
       break;
 
     case 0x24: // blackKeyColor
@@ -94,7 +94,7 @@ void nextStyle() {
       break;
 
     case 0x26: // blackKeyBrightness
-      blackKeySV = getNextBrightness(blackKeySV);
+      blackKeySV = getNextBrightness(blackKeySV, MAX_BRIGHTNESS_FG);
       break;
 
     default: break;
@@ -125,11 +125,11 @@ uint8_t getPrevSaturation(uint8_t codeSV) {
   }
 }
 
-uint8_t getPrevBrightness(uint8_t codeSV) {
+uint8_t getPrevBrightness(uint8_t codeSV, uint8_t maxV) {
   uint8_t sat = codeSV & 0xF0;
   uint8_t bri = codeSV & 0x0F;
   if (bri == 0x00) {
-    return sat | MAX_BRIGHTNESS;
+    return sat | maxV;
   } else {
     return sat | (bri - 1);
   }
@@ -151,7 +151,7 @@ void prevStyle() {
       break;
 
     case 0x13: // bgBrightnessIdle
-      bgSVIdle = getPrevBrightness(bgSVIdle);
+      bgSVIdle = getPrevBrightness(bgSVIdle, MAX_BRIGHTNESS_BG);
       break;
 
     case 0x14: // bgColorActivated
@@ -163,7 +163,7 @@ void prevStyle() {
       break;
 
     case 0x16: // bgBrightnessActivated
-      bgSVActivated = getPrevBrightness(bgSVActivated);
+      bgSVActivated = getPrevBrightness(bgSVActivated, MAX_BRIGHTNESS_BG);
       break;
 
     case 0x20: // keyAnimation
@@ -180,7 +180,7 @@ void prevStyle() {
       break;
 
     case 0x23: // whiteKeyBrightness
-      whiteKeySV = getPrevBrightness(whiteKeySV);
+      whiteKeySV = getPrevBrightness(whiteKeySV, MAX_BRIGHTNESS_FG);
       break;
 
     case 0x24: // blackKeyColor
@@ -192,7 +192,7 @@ void prevStyle() {
       break;
 
     case 0x26: // blackKeyBrightness
-      blackKeySV = getPrevBrightness(blackKeySV);
+      blackKeySV = getPrevBrightness(blackKeySV, MAX_BRIGHTNESS_FG);
       break;
 
     default: break;

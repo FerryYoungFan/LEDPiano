@@ -1,5 +1,5 @@
-/* LED Piano V002
-   by @Fanseline, 20220622
+/* LED Piano V003
+   by @Fanseline, 20220625
 
    Hardware:
      1. Arduino UNO R3 / Leonardo R3
@@ -26,8 +26,10 @@
    Comment out these two features if you are using an UNO or just don't need them
    COMPUTER_TO_PIANO will only be activated when PIANO_TO_COMPUTER is defined
 */
-// #define PIANO_TO_COMPUTER // Loop MIDI data from digital piano (or MIDI keyboard) to computer (output from Leonardo's built-in USB port)
-// #define COMPUTER_TO_PIANO // Send MIDI data from computer to digital piano (Warning: some digital piano did not support this feature!)
+#ifdef ARDUINO_AVR_LEONARDO // Some other boards may support this feature, but I haven't tested them yet
+#define PIANO_TO_COMPUTER // Loop MIDI data from digital piano (or MIDI keyboard) to computer (output from Leonardo's built-in USB port)
+#define COMPUTER_TO_PIANO // Send MIDI data from computer to digital piano (Warning: some digital piano did not support this feature!)
+#endif
 
 #include "Ticker.h"
 #include <FastLED.h>
@@ -50,25 +52,26 @@
 #define START_NOTE 21 // A0, leftmost key on your midi keyboard
 #define MIDI_OFFSET 0
 
-#define FPS 60
-#define MAX_ALPHA 255
-
 /*
    Brightness limit (power limit)
    Consider external power supply for LED strip.
-   If you directly use the on-board 5V pin for LED strip, please set this value
-   lower than 0x08 to avoid harmful voltage drop.
+   If you directly use the on-board 5V pin for LED strip,
+   please set background brightness lower than 0x08 to avoid voltage drop.
 
-   min=0x01, max=0x0F, default=0x08
+   min=0x01, max=0x0F, default_bg=0x08, default_fg=0x0F
 */
-#define MAX_BRIGHTNESS 0x08
+#define MAX_BRIGHTNESS_BG 0x08
+#define MAX_BRIGHTNESS_FG 0x0F
+
+#define FPS 60
+#define MAX_ALPHA 255
 
 #define CONFIG_SIZE 10 // 10 bytes for each config slot
 #define NUM_SAVE_SLOTS 5
 #define NUM_SETTING_KEYS 4 // Leftmost 4 keys for setting
 
 const static uint8_t projectTitleLength = 16;
-const static char projectTitle[projectTitleLength + 1] = "FanLEDPiano V002"; // Modify title will reset EEPROM!
+const static char projectTitle[projectTitleLength + 1] = "FanLEDPiano V003"; // Modify title will reset EEPROM!
 
 /*
    MIDI keyboard - LED mapping (LED number starts from left)
@@ -217,11 +220,11 @@ const static uint8_t defaultConfig[NUM_SAVE_SLOTS][CONFIG_SIZE] =
     8.blackKeyColor
     9.blackKeySV
   */
-  {0x01, 0x87, 0xC2, 0x01, 0xB8, 0x01, 0x07, 0xA8, 0x09, 0xF8},
-  {0x01, 0x07, 0x61, 0xE4, 0xB5, 0x03, 0x07, 0x98, 0x07, 0x98},
-  {0x12, 0x87, 0x92, 0xE6, 0xF6, 0x00, 0x01, 0xA8, 0x01, 0xA8},
-  {0x00, 0xE0, 0xB3, 0xE4, 0xB5, 0x02, 0x05, 0xA8, 0x05, 0xA8},
-  {0x23, 0xE0, 0x92, 0xE4, 0xB5, 0x08, 0x40, 0xF8, 0x40, 0xF8},
+  {0x01, 0x87, 0xC2, 0x01, 0xB8, 0x01, 0x07, 0xAF, 0x09, 0xFF},
+  {0x01, 0x07, 0x61, 0xE4, 0xB5, 0x03, 0x07, 0x9F, 0x07, 0x9F},
+  {0x12, 0x87, 0x92, 0xE6, 0xF6, 0x00, 0x01, 0xAF, 0x01, 0xAF},
+  {0x00, 0xE0, 0xB3, 0xE4, 0xB5, 0x02, 0x05, 0xAF, 0x05, 0xAF},
+  {0x23, 0xE0, 0x92, 0xE4, 0xB5, 0x08, 0x40, 0xFF, 0x40, 0xFF},
 };
 
 
